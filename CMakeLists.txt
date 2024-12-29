@@ -17,6 +17,11 @@ set(CLANG_SEARCH_PATH "/usr/local/bin" "/usr/bin" "/usr/local/opt/llvm/bin" "/us
         "/opt/homebrew/opt/llvm@14/bin/")
 set(CLANG_FORMAT_SUPPORT_DIR "${CMAKE_SOURCE_DIR}/build_support/clang_format")
 set(CLANG_TIDY_SUPPORT_DIR "${CMAKE_SOURCE_DIR}/build_support/clang_tidy")
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -Wall -Werror -fsanitize=address -fsanitize=null -fno-omit-frame-pointer")
+
+message(STATUS "CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
+message(STATUS "CXX COMPILER: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
 # clang
 # 让clangd正确理解项目的编译上下文
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -28,9 +33,9 @@ find_program(CLANG_FORMAT_BIN
         NAMES clang-format clang-format-14
         HINTS ${CLANG_SEARCH_PATH})
 if("${CLANG_FORMAT_BIN}" STREQUAL "CLANG_FORMAT_BIN-NOTFOUND")
-        message(WARNING "BusTub/main couldn't find clang-format.")
+        message(WARNING "HSTL/main couldn't find clang-format.")
 else()
-        message(STATUS "BusTub/main found clang-format at ${CLANG_FORMAT_BIN}")
+        message(STATUS "HSTL/main found clang-format at ${CLANG_FORMAT_BIN}")
 endif()
 
 # 找到clang-tidy的可执行文件

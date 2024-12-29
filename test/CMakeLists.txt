@@ -28,5 +28,6 @@ set(TEST_EXECUTABLES
 foreach(TEST ${TEST_EXECUTABLES})
   add_executable(${TEST} ${TEST}.cpp)
   target_link_libraries(${TEST} GTest::gtest_main)
+  target_link_libraries(${TEST} asan)
   gtest_discover_tests(${TEST})
 endforeach()

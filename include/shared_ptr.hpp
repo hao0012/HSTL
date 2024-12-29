@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cstddef>
 
+#include "internal/smart_ptr.hpp"
 #include "utility.hpp"
 
 namespace hstl {
@@ -27,25 +28,34 @@ struct counter {
   size_t get_shared() { return shared_count_.load(std::memory_order_relaxed); }
   size_t get_weak() { return weak_count_.load(std::memory_order_relaxed); }
 
+  virtual void* get_deleter() noexcept = 0;
+
   virtual void release_object() noexcept = 0;
   virtual void release_this() noexcept = 0;
+
+  virtual ~counter() = default;
 
   // TODO(hao): 自己实现atomic
   std::atomic<size_t> shared_count_;
   std::atomic<size_t> weak_count_;
 };
 
-template <typename T>
+template <typename T, typename Deleter>
 class counter_t : public counter {
  public:
   using value_type = T;
+  using deleter_type = Deleter;
   static_assert(is_pointer<T>::value, "counter_t<T>: T must be pointer type");
 
-  counter_t(value_type value) : counter(), value_{value} {}
+  counter_t(value_type value, deleter_type deleter = default_deleter<T>())
+      : value_{value}, deleter_(move(deleter)) {}
+
+  // TODO(hao): enable RTTI or not has different behavior
+  void* get_deleter() noexcept override { return &deleter_; }
 
   void release_object() noexcept override {
     if (value_ != nullptr) {
-      delete value_;
+      deleter_(value_);
       value_ = nullptr;
     }
   }
@@ -57,6 +67,7 @@ class counter_t : public counter {
 
  private:
   value_type value_;
+  deleter_type deleter_;
 };
 
 template <typename T>
@@ -68,6 +79,8 @@ class counter_emplace : public counter {
   counter_emplace(Args&&... args) : counter(), value_{forward<Args>(args)...} {}
 
   value_type* get_value_ptr() { return &value_; }
+
+  void* get_deleter() noexcept override { return nullptr; }
 
   // 一起释放
   void release_object() noexcept override {}
@@ -81,9 +94,7 @@ class counter_emplace : public counter {
 template <typename T>
 class weak_ptr;
 
-/**
- * 专门为shared_ptr<void>类型提供的，保证T == void时，T& operator*()不会编译出错
- */
+// 专门为shared_ptr<void>类型提供的，保证T == void时，T& operator*()不会编译出错
 template <typename T>
 struct shared_ptr_traits {
   using reference_type = T&;
@@ -120,28 +131,34 @@ class shared_ptr {
 
  public:
   using reference_type = typename shared_ptr_traits<T>::reference_type;
+  using default_deleter_type = default_deleter<T>;
   using element_type = T;
 
   constexpr shared_ptr() noexcept : ptr_{nullptr}, count_{nullptr} {};
-  constexpr shared_ptr(std::nullptr_t) noexcept
+  constexpr shared_ptr(
+      std::nullptr_t) noexcept  // noexcept要求我们不为count申请内存
       : ptr_{nullptr}, count_{nullptr} {};
 
-  /**
-   * 1.
-   * ptr必须是还未被管理的指针，不能已经被其他智能指针管理，否则会导致多个counter管理一个对象
-   * 当其中一个的shared_count_为0时会释放资源，但是它并不知道其他count还持有该资源。
-   * 2. SFINE确保Y是T或T的派生类(ptr_{ptr})
-   */
+  // poscondition: use_count == 1
+  template <typename Deleter>
+  shared_ptr(std::nullptr_t ptr, Deleter deleter)
+      : ptr_{nullptr}, count_{nullptr} {
+    count_ = new counter_t<element_type*, Deleter>(nullptr, deleter);
+  };
+
   template <typename Y>
   shared_ptr(Y* ptr) : ptr_{ptr} {
-    if (ptr != nullptr) {
-      count_ = new counter_t<Y*>(ptr);
-    }
+    count_ = new counter_t<Y*, default_deleter_type>(ptr);
+  };
+
+  template <typename Y, typename Deleter>
+  shared_ptr(Y* ptr, Deleter deleter) : ptr_{ptr} {
+    count_ = new counter_t<Y*, Deleter>(ptr, deleter);
   };
 
   shared_ptr(const shared_ptr& other) noexcept
       : ptr_{other.ptr_}, count_{other.count_} {
-    if (ptr_ != nullptr) {
+    if (count_ != nullptr) {
       count_->increase_shared();
     }
   }
@@ -149,7 +166,7 @@ class shared_ptr {
   template <typename Y>
   shared_ptr(const shared_ptr<Y>& other) noexcept
       : ptr_{other.ptr_}, count_{other.count_} {
-    if (ptr_ != nullptr) {
+    if (count_ != nullptr) {
       count_->increase_shared();
     }
   }
@@ -168,9 +185,8 @@ class shared_ptr {
   }
 
   template <typename Y>
-  shared_ptr(const weak_ptr<Y>& r) noexcept
-      : ptr_{r.ptr_}, count_{r.count_} {
-    if (ptr_ != nullptr) {
+  shared_ptr(const weak_ptr<Y>& r) noexcept : ptr_{r.ptr_}, count_{r.count_} {
+    if (count_ != nullptr) {
       count_->increase_shared();
     }
   }
@@ -199,7 +215,8 @@ class shared_ptr {
   }
 
   ~shared_ptr() {
-    if (ptr_ == nullptr) {
+    // count_不会早于ptr_被析构
+    if (count_ == nullptr) {
       return;
     }
     if (count_->decrease_shared() == 1) {
@@ -241,7 +258,11 @@ class shared_ptr {
     return (*ptr_)[idx];
   }
 
-  size_t use_count() { return ptr_ == nullptr ? 0 : count_->get_shared(); }
+  /**
+   * @return 拥有object所有权的shared_ptr对象的个数
+   *        （注意，这与object是否为nullptr无关）
+   */
+  size_t use_count() { return count_ == nullptr ? 0 : count_->get_shared(); }
   operator bool() { return ptr_ != nullptr; }
 
  private:

@@ -57,14 +57,25 @@ TEST(SharedPtrTest, MoveTest) {
   ASSERT_EQ(ptr2.use_count(), 1);
 }
 
-class Base {
- public:
-  virtual ~Base() = default;
+struct Base {
+  Base() : b(new int[10]) {}
   virtual void print() const { std::cout << "Base" << std::endl; }
+  virtual ~Base() {
+    delete[] b;
+    b = nullptr;
+  }
+
+  int* b;
 };
-class Derived : public Base {
- public:
+struct Derived : public Base {
+  Derived() : Base(), d(new int[10]) {}
   void print() const override { std::cout << "Derived" << std::endl; }
+  ~Derived() {
+    delete[] d;
+    d = nullptr;
+  }
+
+  int* d;
 };
 
 TEST(SharedPtrTest, InheritanceTest) {
@@ -99,6 +110,41 @@ TEST(SharedPtrTest, InheritanceTest) {
     std::cout.rdbuf(cout_buf);
     ASSERT_EQ(oss.str(), "Base\n");
   }
+}
+
+TEST(SharedPtrTest, DeleterBasicTest) {
+  bool deleter_set = false;
+  auto deleter = [&](TestObject* p) {
+    deleter_set = true;
+    delete p;
+  };
+
+  {
+    hstl::shared_ptr<TestObject> ptr(new TestObject(100), deleter);
+    ASSERT_EQ(ptr.use_count(), 1);
+    ASSERT_EQ(deleter_set, false);
+  };
+  ASSERT_EQ(deleter_set, true);
+  deleter_set = false;
+  {
+    hstl::shared_ptr<TestObject> ptr(new TestObject(100), deleter);
+    ASSERT_EQ(ptr.use_count(), 1);
+    ASSERT_EQ(ptr->value, 100);
+  }
+  ASSERT_EQ(deleter_set, true);
+}
+
+TEST(SharedPtrTest, DeleterInheritanceTest) {
+  auto bd = [](Base* p) {
+    std::cout << "Delete Base" << std::endl;
+    delete p;
+  };
+  auto dd = [](Derived* p) {
+    std::cout << "Delete Derived" << std::endl;
+    delete p;
+  };
+  hstl::shared_ptr<Derived> dp(new Derived(), dd);
+  hstl::shared_ptr<Base> bp(dp);
 }
 
 TEST(WeakPtrTest, BasicTest) {

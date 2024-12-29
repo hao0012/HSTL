@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include "type_traits.hpp"
 #include "utility.hpp"
 
 struct Default {
@@ -14,6 +15,6 @@ struct NonDefault {
 TEST(DECLVAL_TEST, TEST1) {
   decltype(Default().foo()) n1 = 1;  // type of n1 is int
   //  decltype(NonDefault().foo()) n2 = n1;             // error: no default
-  //  constructor
-  decltype(std::declval<NonDefault>().foo()) n2 = n1;  // type of n2 is int
+  decltype(hstl::declval<NonDefault>().foo()) n2 = n1;  // type of n2 is int
+  ASSERT_TRUE((hstl::is_same_v<decltype(n2), int>));
 }

@@ -22,7 +22,7 @@ struct remove_reference<T&&> {
 };
 
 template <typename T>
-using remove_reference_t = typename hstl::remove_reference<T>::type;
+using remove_reference_t = typename remove_reference<T>::type;
 
 // --------------------- enable_if ----------------------- //
 template <bool B, typename T = void>
@@ -34,7 +34,7 @@ struct enable_if<true, T> {
 };
 
 template <bool B, typename T = void>
-using enable_if_t = typename hstl::enable_if<B, T>::type;
+using enable_if_t = typename enable_if<B, T>::type;
 
 // ---------------- add_rvalue_reference ------------------ //
 // "cv void&"时该模板替换失败，跳到下一个模板(SFINAE)
@@ -94,34 +94,34 @@ struct integral_constant {
   constexpr value_type operator()() const noexcept { return value; }
 };
 
-using true_type = hstl::integral_constant<bool, true>;
-using false_type = hstl::integral_constant<bool, false>;
+using true_type = integral_constant<bool, true>;
+using false_type = integral_constant<bool, false>;
 
 // ---------------- is_lvalue_reference ------------------ //
 template <typename T>
-struct is_lvalue_reference : hstl::false_type {};
+struct is_lvalue_reference : false_type {};
 template <typename T>
-struct is_lvalue_reference<T&> : hstl::true_type {};
+struct is_lvalue_reference<T&> : true_type {};
 
 template <typename T>
 constexpr bool is_lvalue_reference_v = is_lvalue_reference<T>::value;
 
 // ---------------- is_rvalue_reference ------------------ //
 template <typename T>
-struct is_rvalue_reference : hstl::false_type {};
+struct is_rvalue_reference : false_type {};
 template <typename T>
-struct is_rvalue_reference<T&&> : hstl::true_type {};
+struct is_rvalue_reference<T&&> : true_type {};
 
 template <typename T>
 constexpr bool is_rvalue_reference_v = is_rvalue_reference<T>::value;
 
 // ---------------- is_reference ------------------ //
 template <typename T>
-struct is_reference : hstl::false_type {};
+struct is_reference : false_type {};
 template <typename T>
-struct is_reference<T&> : hstl::true_type {};
+struct is_reference<T&> : true_type {};
 template <typename T>
-struct is_reference<T&&> : hstl::true_type {};
+struct is_reference<T&&> : true_type {};
 
 template <typename T>
 constexpr bool is_reference_v = is_reference<T>::value;
@@ -129,34 +129,33 @@ constexpr bool is_reference_v = is_reference<T>::value;
 // ---------------- is_convertible ------------------ //
 // 用于判断From是否可以转换为To
 template <typename From, typename To>
-struct is_convertible;
-// TODO
+struct is_convertible : false_type {};
 
 // ---------------- is_same ------------------ //
 template <typename T, typename U>
-struct is_same : hstl::false_type {};
+struct is_same : false_type {};
 
 template <typename T>
-struct is_same<T, T> : hstl::true_type {};
+struct is_same<T, T> : true_type {};
 
 template <typename T, typename U>
-constexpr bool is_same_v = hstl::is_same<T, U>::value;
+constexpr bool is_same_v = is_same<T, U>::value;
 
 // ---------------- is_pointer ------------------ //
 template <typename T>
-struct is_pointer : hstl::false_type {};
+struct is_pointer : false_type {};
 
 template <typename T>
-struct is_pointer<T*> : hstl::true_type {};
+struct is_pointer<T*> : true_type {};
 
 template <typename T>
-struct is_pointer<T* const> : hstl::true_type {};
+struct is_pointer<T* const> : true_type {};
 
 template <typename T>
-struct is_pointer<T* volatile> : hstl::true_type {};
+struct is_pointer<T* volatile> : true_type {};
 
 template <typename T>
-struct is_pointer<T* const volatile> : hstl::true_type {};
+struct is_pointer<T* const volatile> : true_type {};
 
 template <typename T>
 constexpr bool is_pointer_v = is_pointer<T>::value;
@@ -166,10 +165,10 @@ template <typename T>
 struct is_array : false_type {};
 
 template <typename T>
-struct is_array<T[]> : hstl::true_type {};
+struct is_array<T[]> : true_type {};
 
 template <typename T, size_t N>
-struct is_array<T[N]> : hstl::true_type {};
+struct is_array<T[N]> : true_type {};
 
 }  // namespace hstl
 
