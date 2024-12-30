@@ -3,8 +3,8 @@
 #include <iostream>
 // #include <thread>
 // #include <vector>
-#include "shared_ptr.hpp"
 #include "enable_shared.hpp"
+#include "shared_ptr.hpp"
 
 class TestObject {
  public:
@@ -149,9 +149,7 @@ TEST(SharedPtrTest, DeleterInheritanceTest) {
 }
 
 struct EnableSharedTest : hstl::enable_shared_from_this<EnableSharedTest> {
-  hstl::shared_ptr<EnableSharedTest> get_shared() { 
-    return shared_from_this(); 
-  }
+  hstl::shared_ptr<EnableSharedTest> get_shared() { return shared_from_this(); }
 };
 
 TEST(SharedPtrTest, EnableSharedFromThisTest) {
@@ -194,4 +192,12 @@ TEST(WeakPtrTest, BasicTest) {
     hstl::shared_ptr<TestObject> ptr2 = wp.lock();
     ASSERT_EQ(ptr2.get(), nullptr);
   }
+}
+
+TEST(WeakPtrTest, BadTest) {
+  hstl::shared_ptr<int> p1(new int(42));
+  hstl::weak_ptr<int> wp(p1);
+  p1.reset();
+  auto f = [&]() { hstl::shared_ptr<int> p2(wp); };
+  ASSERT_THROW(f(), hstl::bad_weak_ptr);
 }

@@ -3,10 +3,10 @@
 
 #include <atomic>
 #include <cstddef>
+#include <exception>
 
 #include "internal/smart_ptr.hpp"
 #include "utility.hpp"
-
 
 namespace hstl {
 
@@ -28,6 +28,19 @@ struct counter {
 
   size_t get_shared() { return shared_count_.load(std::memory_order_relaxed); }
   size_t get_weak() { return weak_count_.load(std::memory_order_relaxed); }
+
+  bool lock() noexcept {
+    auto shared = get_shared();
+    while (shared > 0) {
+      if (shared_count_.compare_exchange_weak(shared, shared + 1,
+                                              std::memory_order_relaxed,
+                                              std::memory_order_relaxed)) {
+        return true;
+      }
+      shared = get_shared();
+    }
+    return false;
+  }
 
   virtual void* get_deleter() noexcept = 0;
 
@@ -85,17 +98,17 @@ class counter_emplace : public counter {
 
   // 这里需要先析构，否则计数不对（引入enable_shared_from_this后会发生计数减不到0的问题）
   void release_object() noexcept override { value_.~value_type(); }
-  void release_this() noexcept override {
-    ::operator delete(this);
-  }
+  void release_this() noexcept override { ::operator delete(this); }
 
  private:
   // 数据和shared_count存放在同一个内存块中
   value_type value_;
 };
 
-template <typename T> class weak_ptr;
-template <typename T> class enable_shared_from_this;
+template <typename T>
+class weak_ptr;
+template <typename T>
+class enable_shared_from_this;
 
 // 专门为shared_ptr<void>类型提供的，保证T == void时，T& operator*()不会编译出错
 template <typename T>
@@ -121,6 +134,10 @@ struct shared_ptr_traits<void volatile> {
 template <>
 struct shared_ptr_traits<void const volatile> {
   using reference_type = void;
+};
+
+struct bad_weak_ptr : std::exception {
+  const char* what() const noexcept override { return "bad_weak_ptr"; }
 };
 
 template <typename T>
@@ -152,7 +169,8 @@ class shared_ptr {
 
   template <typename Y>
   shared_ptr(Y* ptr) : ptr_{ptr} {
-    count_ = new counter_t<Y*, default_deleter_type>(ptr, default_deleter_type());
+    count_ =
+        new counter_t<Y*, default_deleter_type>(ptr, default_deleter_type());
     do_enable_shared_from_this(*this, ptr);
   };
 
@@ -192,8 +210,9 @@ class shared_ptr {
 
   template <typename Y>
   shared_ptr(const weak_ptr<Y>& r) noexcept : ptr_{r.ptr_}, count_{r.count_} {
-    if (count_ != nullptr) {
-      count_->increase_shared();
+    count_->lock();
+    if (count_->get_shared() == 0) {
+      throw bad_weak_ptr();
     }
   }
 
@@ -288,14 +307,15 @@ shared_ptr<T> make_shared(Args&&... args) {
   return p;
 }
 
-template<typename T, typename U>
-void do_enable_shared_from_this(shared_ptr<T> ptr, enable_shared_from_this<U>* current) {
+template <typename T, typename U>
+void do_enable_shared_from_this(shared_ptr<T> sp,
+                                enable_shared_from_this<U>* current) {
   if (current != nullptr) {
-    current->weak_this_ = ptr;
+    current->weak_this_ = sp;
   }
 }
 
-template<typename T>
+template <typename T>
 void do_enable_shared_from_this(shared_ptr<T> ptr, ...) {}
 
 template <typename T>
@@ -400,17 +420,9 @@ class weak_ptr {
 
   shared_ptr<T> lock() const noexcept {
     shared_ptr<T> p;
-
-    auto shared = use_count();
-    while (shared > 0) {
-      if (count_->shared_count_.compare_exchange_weak(
-              shared, shared + 1, std::memory_order_relaxed,
-              std::memory_order_relaxed)) {
-        p.ptr_ = ptr_;
-        p.count_ = count_;
-        break;
-      }
-      shared = use_count();
+    if (count_->lock()) {
+      p.ptr_ = ptr_;
+      p.count_ = count_;
     }
     return p;
   }
