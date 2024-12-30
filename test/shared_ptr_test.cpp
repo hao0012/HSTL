@@ -4,6 +4,7 @@
 // #include <thread>
 // #include <vector>
 #include "shared_ptr.hpp"
+#include "enable_shared.hpp"
 
 class TestObject {
  public:
@@ -145,6 +146,26 @@ TEST(SharedPtrTest, DeleterInheritanceTest) {
   };
   hstl::shared_ptr<Derived> dp(new Derived(), dd);
   hstl::shared_ptr<Base> bp(dp);
+}
+
+struct EnableSharedTest : hstl::enable_shared_from_this<EnableSharedTest> {
+  hstl::shared_ptr<EnableSharedTest> get_shared() { 
+    return shared_from_this(); 
+  }
+};
+
+TEST(SharedPtrTest, EnableSharedFromThisTest) {
+  auto ptr = hstl::shared_ptr<EnableSharedTest>(new EnableSharedTest());
+  ASSERT_EQ(ptr.use_count(), 1);
+  auto ptr2 = ptr->get_shared();
+  ASSERT_EQ(ptr.use_count(), 2);
+  ASSERT_EQ(ptr2.use_count(), 2);
+
+  auto ms_ptr = hstl::make_shared<EnableSharedTest>();
+  ASSERT_EQ(ms_ptr.use_count(), 1);
+  auto ms_ptr2 = ms_ptr->get_shared();
+  ASSERT_EQ(ms_ptr.use_count(), 2);
+  ASSERT_EQ(ms_ptr2.use_count(), 2);
 }
 
 TEST(WeakPtrTest, BasicTest) {

@@ -7,6 +7,7 @@
 #include "internal/smart_ptr.hpp"
 #include "utility.hpp"
 
+
 namespace hstl {
 
 struct counter {
@@ -47,7 +48,7 @@ class counter_t : public counter {
   using deleter_type = Deleter;
   static_assert(is_pointer<T>::value, "counter_t<T>: T must be pointer type");
 
-  counter_t(value_type value, deleter_type deleter = default_deleter<T>())
+  counter_t(value_type value, deleter_type deleter)
       : value_{value}, deleter_(move(deleter)) {}
 
   // TODO(hao): enable RTTI or not has different behavior
@@ -82,17 +83,19 @@ class counter_emplace : public counter {
 
   void* get_deleter() noexcept override { return nullptr; }
 
-  // 一起释放
-  void release_object() noexcept override {}
-  void release_this() noexcept override { delete this; }
+  // 这里需要先析构，否则计数不对（引入enable_shared_from_this后会发生计数减不到0的问题）
+  void release_object() noexcept override { value_.~value_type(); }
+  void release_this() noexcept override {
+    ::operator delete(this);
+  }
 
  private:
   // 数据和shared_count存放在同一个内存块中
   value_type value_;
 };
 
-template <typename T>
-class weak_ptr;
+template <typename T> class weak_ptr;
+template <typename T> class enable_shared_from_this;
 
 // 专门为shared_ptr<void>类型提供的，保证T == void时，T& operator*()不会编译出错
 template <typename T>
@@ -144,16 +147,19 @@ class shared_ptr {
   shared_ptr(std::nullptr_t ptr, Deleter deleter)
       : ptr_{nullptr}, count_{nullptr} {
     count_ = new counter_t<element_type*, Deleter>(nullptr, deleter);
+    do_enable_shared_from_this(*this, ptr);
   };
 
   template <typename Y>
   shared_ptr(Y* ptr) : ptr_{ptr} {
-    count_ = new counter_t<Y*, default_deleter_type>(ptr);
+    count_ = new counter_t<Y*, default_deleter_type>(ptr, default_deleter_type());
+    do_enable_shared_from_this(*this, ptr);
   };
 
   template <typename Y, typename Deleter>
   shared_ptr(Y* ptr, Deleter deleter) : ptr_{ptr} {
     count_ = new counter_t<Y*, Deleter>(ptr, deleter);
+    do_enable_shared_from_this(*this, ptr);
   };
 
   shared_ptr(const shared_ptr& other) noexcept
@@ -222,6 +228,8 @@ class shared_ptr {
     if (count_->decrease_shared() == 1) {
       std::atomic_thread_fence(std::memory_order_acquire);
       count_->release_object();
+      // 只有一个shared_ptr对象会持有weak_count，所以这里只需要减1次，
+      // 不需要每个shared_ptr对象都减
       if (count_->decrease_weak() == 1) {
         std::atomic_thread_fence(std::memory_order_acquire);
         count_->release_this();
@@ -276,8 +284,19 @@ shared_ptr<T> make_shared(Args&&... args) {
   auto count = new counter_emplace<T>(forward<Args>(args)...);
   p.ptr_ = count->get_value_ptr();
   p.count_ = count;
+  do_enable_shared_from_this(p, p.ptr_);
   return p;
 }
+
+template<typename T, typename U>
+void do_enable_shared_from_this(shared_ptr<T> ptr, enable_shared_from_this<U>* current) {
+  if (current != nullptr) {
+    current->weak_this_ = ptr;
+  }
+}
+
+template<typename T>
+void do_enable_shared_from_this(shared_ptr<T> ptr, ...) {}
 
 template <typename T>
 class weak_ptr {
@@ -289,28 +308,28 @@ class weak_ptr {
 
   constexpr weak_ptr() noexcept : ptr_{nullptr}, count_{nullptr} {};
   weak_ptr(const weak_ptr& r) noexcept : ptr_{r.ptr_}, count_{r.count_} {
-    if (ptr_ != nullptr) {
+    if (count_ != nullptr) {
       count_->increase_weak();
     }
   }
 
   template <typename Y>
   weak_ptr(const weak_ptr<Y>& r) noexcept : ptr_{r.ptr_}, count_{r.count_} {
-    if (ptr_ != nullptr) {
+    if (count_ != nullptr) {
       count_->increase_weak();
     }
   }
 
   // TODO(hao): 为什么没有下面的这个函数？
   weak_ptr(const shared_ptr<T>& r) noexcept : ptr_{r.ptr_}, count_{r.count_} {
-    if (ptr_ != nullptr) {
+    if (count_ != nullptr) {
       count_->increase_weak();
     }
   }
 
   template <typename Y>
   weak_ptr(const shared_ptr<Y>& r) noexcept : ptr_{r.ptr_}, count_{r.count_} {
-    if (ptr_ != nullptr) {
+    if (count_ != nullptr) {
       count_->increase_weak();
     }
   }
@@ -355,7 +374,7 @@ class weak_ptr {
   }
 
   ~weak_ptr() {
-    if (ptr_ == nullptr) {
+    if (count_ == nullptr) {
       return;
     }
     if (count_->decrease_weak() == 1 /* && count_->get_shared() == 0 */) {
