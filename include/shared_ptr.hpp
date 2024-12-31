@@ -265,9 +265,19 @@ class shared_ptr {
     shared_ptr(ptr).swap(*this);
   }
 
+  template <typename Y, typename Deleter>
+  void reset(Y* ptr, Deleter d) {
+    shared_ptr(ptr, d).swap(*this);
+  }
+
   void swap(shared_ptr& other) noexcept {
-    std::swap(ptr_, other.ptr_);
-    std::swap(count_, other.count_);
+    auto ptr = this->ptr_;
+    this->ptr_ = other.ptr_;
+    other.ptr_ = ptr;
+
+    auto count = this->count_;
+    this->count_ = other.count_;
+    other.count_ = count;
   }
 
   // --------------------------- Observers ------------------------------- //
@@ -408,8 +418,13 @@ class weak_ptr {
   void reset() noexcept { weak_ptr().swap(*this); }
 
   void swap(weak_ptr& r) noexcept {
-    std::swap(ptr_, r.ptr_);
-    std::swap(count_, r.count_);
+    auto ptr = this->ptr_;
+    this->ptr_ = r.ptr_;
+    r.ptr_ = ptr;
+
+    auto count = this->count_;
+    this->count_ = r.count_;
+    r.count_ = count;
   }
 
   size_t use_count() const noexcept {

@@ -19,6 +19,7 @@ include(GoogleTest)
 
 set(TEST_EXECUTABLES
   shared_ptr_test
+  unique_ptr_test
   forward_test
   is_reference_test
   add_reference_test
