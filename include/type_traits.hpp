@@ -170,6 +170,23 @@ struct is_array<T[]> : true_type {};
 template <typename T, size_t N>
 struct is_array<T[N]> : true_type {};
 
+template<typename T>
+constexpr bool is_array_v = is_array<T>::value;
+
+// ---------------- conditional ------------------ //
+template <bool B, typename T, typename F>
+struct conditional {
+  using type = F;
+};
+
+template <typename T, typename F>
+struct conditional<true, T, F> {
+  using type = T;
+};
+
+template <bool B, typename T, typename F>
+using conditional_t = typename conditional<B, T, F>::type;
+
 }  // namespace hstl
 
 #endif  // TYPE_TRAITS_HPP_

@@ -6,6 +6,7 @@
 #include <exception>
 
 #include "internal/smart_ptr.hpp"
+#include "internal/compressed_pair.hpp"
 #include "utility.hpp"
 
 namespace hstl {
@@ -62,15 +63,15 @@ class counter_t : public counter {
   static_assert(is_pointer<T>::value, "counter_t<T>: T must be pointer type");
 
   counter_t(value_type value, deleter_type deleter)
-      : value_{value}, deleter_(move(deleter)) {}
+      : pair_{value, move(deleter)} {}
 
   // TODO(hao): enable RTTI or not has different behavior
-  void* get_deleter() noexcept override { return &deleter_; }
+  void* get_deleter() noexcept override { return &pair_.second(); }
 
   void release_object() noexcept override {
-    if (value_ != nullptr) {
-      deleter_(value_);
-      value_ = nullptr;
+    if (pair_.first() != nullptr) {
+      pair_.second()(pair_.first());
+      pair_.first() = nullptr;
     }
   }
 
@@ -80,8 +81,7 @@ class counter_t : public counter {
   }
 
  private:
-  value_type value_;
-  deleter_type deleter_;
+  compressed_pair<value_type, deleter_type> pair_;
 };
 
 template <typename T>
@@ -163,20 +163,35 @@ class shared_ptr {
   template <typename Deleter>
   shared_ptr(std::nullptr_t ptr, Deleter deleter)
       : ptr_{nullptr}, count_{nullptr} {
-    count_ = new counter_t<element_type*, Deleter>(nullptr, deleter);
+    try {
+      count_ = new counter_t<element_type*, Deleter>(nullptr, deleter);
+    } catch (...) { // std::bad_alloc
+      deleter(ptr);
+      throw;
+    }
     do_enable_shared_from_this(*this, ptr);
   };
 
   template <typename Y>
   shared_ptr(Y* ptr) : ptr_{ptr} {
-    count_ =
+    try {
+      count_ =
         new counter_t<Y*, default_deleter_type>(ptr, default_deleter_type());
+    } catch (...) {
+      delete ptr;
+      throw;
+    }
     do_enable_shared_from_this(*this, ptr);
   };
 
   template <typename Y, typename Deleter>
   shared_ptr(Y* ptr, Deleter deleter) : ptr_{ptr} {
-    count_ = new counter_t<Y*, Deleter>(ptr, deleter);
+    try {
+      count_ = new counter_t<Y*, Deleter>(ptr, deleter);
+    } catch (...) {
+      deleter(ptr);
+      throw;
+    }
     do_enable_shared_from_this(*this, ptr);
   };
 
@@ -288,16 +303,16 @@ class shared_ptr {
   element_type* operator->() { return ptr_; }
 
   template <typename U>
-  using enable_if_array = enable_if_t<is_array<U>::value>;
+  using enable_if_array = enable_if_t<is_array_v<U>>;
   // https://en.cppreference.com/w/cpp/memory/shared_ptr/operator_at
   template <typename U = T, typename = enable_if_array<U>>
   reference_type operator[](std::ptrdiff_t idx) const {
-    return (*ptr_)[idx];
+    return ptr_[idx];
   }
 
   /**
    * @return 拥有object所有权的shared_ptr对象的个数
-   *        （注意，这与object是否为nullptr无关）
+   *        （注意，这与指针是否为nullptr无关）
    */
   size_t use_count() { return count_ == nullptr ? 0 : count_->get_shared(); }
   operator bool() { return ptr_ != nullptr; }

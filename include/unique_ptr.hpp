@@ -1,31 +1,42 @@
 #ifndef UNIQUE_PTR_HPP_
 #define UNIQUE_PTR_HPP_
 
-// #include "internal/smart_ptr.hpp"
+#include "internal/compressed_pair.hpp"
+#include "internal/smart_ptr.hpp"
+#include "type_traits.hpp"
 #include "utility.hpp"
 
 namespace hstl {
 
-template <typename T>
+template <typename T, typename Deleter = default_deleter<T>>
 class unique_ptr {
  public:
-  template <typename Y>
-  friend class unique_ptr;
-
   using element_type = T;
   using pointer = element_type*;
+  using deleter_type = Deleter;
 
-  constexpr unique_ptr() noexcept : ptr_{nullptr} {}
-  constexpr unique_ptr(std::nullptr_t) noexcept : ptr_{nullptr} {}
-  explicit unique_ptr(pointer p) noexcept : ptr_{p} {}
+  constexpr unique_ptr() noexcept : pair_{nullptr} {}
+  constexpr unique_ptr(std::nullptr_t) noexcept : pair_{nullptr} {}
+  explicit unique_ptr(pointer p) noexcept : pair_{p} {}
+
+  // deleter_type为引用
+  unique_ptr(pointer p,
+             conditional_t<is_lvalue_reference_v<deleter_type>, deleter_type,
+                           add_lvalue_reference_t<deleter_type>>
+                 d) noexcept
+      : pair_{p, d} {}
+  // deleter_type为右值
+  unique_ptr(pointer p, remove_reference_t<deleter_type>&& d) noexcept
+      : pair_{p, move(d)} {}
 
   unique_ptr(const unique_ptr& u) = delete;
 
-  unique_ptr(unique_ptr&& u) noexcept : ptr_{u.ptr_} { u.ptr_ = nullptr; }
-  template <typename Y>
-  unique_ptr(unique_ptr<Y>&& u) noexcept : ptr_{u.ptr_} {
-    u.ptr_ = nullptr;
-  }
+  unique_ptr(unique_ptr&& u) noexcept
+      : pair_{u.release(), forward<deleter_type>(u.get_deleter())} {}
+
+  template <typename U, typename E>
+  unique_ptr(unique_ptr<U, E>&& u) noexcept
+      : pair_(u.release(), forward<E>(u.get_deleter())) {}
 
   unique_ptr& operator=(const unique_ptr& u) = delete;
 
@@ -34,8 +45,8 @@ class unique_ptr {
     return *this;
   }
 
-  template <typename Y>
-  unique_ptr& operator=(unique_ptr<Y>&& r) noexcept {
+  template <typename U, typename E>
+  unique_ptr& operator=(unique_ptr<U, E>&& r) noexcept {
     unique_ptr(hstl::move(r)).swap(*this);
     return *this;
   }
@@ -45,35 +56,38 @@ class unique_ptr {
     return *this;
   }
 
-  ~unique_ptr() { delete ptr_; }
+  ~unique_ptr() { pair_.second()(pair_.first()); }
 
-  pointer get() const noexcept { return ptr_; }
+  pointer get() const noexcept { return pair_.first(); }
 
-  operator bool() const noexcept { return ptr_ != nullptr; }
+  Deleter& get_deleter() noexcept { return pair_.second(); }
+  const Deleter& get_deleter() const noexcept { return pair_.second(); }
+
+  operator bool() const noexcept { return pair_.first() != nullptr; }
 
   void reset(pointer p = pointer()) noexcept { unique_ptr(p).swap(*this); }
 
   void swap(unique_ptr& other) noexcept {
-    auto p = ptr_;
-    ptr_ = other.ptr_;
-    other.ptr_ = p;
+    auto p = pair_;
+    pair_ = other.pair_;
+    other.pair_ = p;
   }
 
   pointer release() noexcept {
-    auto p = ptr_;
-    ptr_ = nullptr;
+    auto p = pair_.first();
+    pair_.first() = nullptr;
     return p;
   }
 
-  hstl::add_lvalue_reference_t<T> operator*() const
+  add_lvalue_reference_t<T> operator*() const
       noexcept(noexcept(*hstl::declval<pointer>())) {
-    return *ptr_;
+    return *(pair_.first());
   }
 
-  pointer operator->() const noexcept { return ptr_; }
+  pointer operator->() const noexcept { return pair_.first(); }
 
  private:
-  pointer ptr_;
+  compressed_pair<pointer, deleter_type> pair_;
 };
 
 // http://stackoverflow.com/questions/12580432/why-does-c11-have-make-shared-but-not-make-unique

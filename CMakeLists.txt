@@ -44,11 +44,11 @@ find_program(CLANG_TIDY_BIN
         HINTS ${CLANG_SEARCH_PATH})
 
 if("${CLANG_TIDY_BIN}" STREQUAL "CLANG_TIDY_BIN-NOTFOUND")
-        message(WARNING "BusTub/main couldn't find clang-tidy.")
+        message(WARNING "HSTL/main couldn't find clang-tidy.")
 else()
         # Output compile_commands.json
         set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
-        message(STATUS "BusTub/main found clang-tidy at ${CLANG_TIDY_BIN}")
+        message(STATUS "HSTL/main found clang-tidy at ${CLANG_TIDY_BIN}")
 endif()
 
 # make format
