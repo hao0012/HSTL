@@ -11,13 +11,13 @@ TEST(UniquePtrTest, DefaultConstructor) {
   EXPECT_EQ(ptr2.get(), nullptr);
 }
 
-struct Foo {
+struct MoveOnly {
   int x;
-  Foo(int x) : x(x) {}
+  MoveOnly(int x) : x(x) {}
 };
 
 struct FooDeleter {
-  void operator()(Foo* foo) {
+  void operator()(MoveOnly* foo) {
     std::cout << "delete foo..." << std::endl;
     delete foo;
   }
@@ -28,7 +28,7 @@ TEST(UniquePtrTest, ConstructorWithRawPointer) {
   EXPECT_NE(ptr.get(), nullptr);
   EXPECT_EQ(*ptr, 42);
 
-  hstl::unique_ptr<Foo, FooDeleter> fooPtr(new Foo(42));
+  hstl::unique_ptr<MoveOnly, FooDeleter> fooPtr(new MoveOnly(42));
   EXPECT_NE(fooPtr.get(), nullptr);
   // print "delete foo..."
 }
@@ -40,8 +40,8 @@ TEST(UniquePtrTest, MoveConstructor) {
   EXPECT_NE(ptr2.get(), nullptr);
   EXPECT_EQ(*ptr2, 42);
 
-  hstl::unique_ptr<Foo, FooDeleter> fooPtr1(new Foo(42), FooDeleter());
-  hstl::unique_ptr<Foo, FooDeleter> fooPtr2(hstl::move(fooPtr1));
+  hstl::unique_ptr<MoveOnly, FooDeleter> fooPtr1(new MoveOnly(42), FooDeleter());
+  hstl::unique_ptr<MoveOnly, FooDeleter> fooPtr2(hstl::move(fooPtr1));
   EXPECT_EQ(fooPtr1.get(), nullptr);
   // 注意，下面的测试是错误的，fooPtr2中会构造一个新的pair，
   // move在这里的作用是减少参数传递时的拷贝，而不是说fooPtr2
@@ -78,14 +78,14 @@ TEST(UniquePtrTest, EBO) {
   EXPECT_EQ(sizeof(ptr1), sizeof(int*));
 
   // 静态类型的删除器，编译时即可确定类型大小
-  hstl::unique_ptr<Foo, FooDeleter> ptr2(new Foo(42));
-  EXPECT_EQ(sizeof(ptr2), sizeof(Foo*));
+  hstl::unique_ptr<MoveOnly, FooDeleter> ptr2(new MoveOnly(42));
+  EXPECT_EQ(sizeof(ptr2), sizeof(MoveOnly*));
 
   // 函数指针的大小不为0，无法应用EBO
   // 动态类型的删除器，指针可以指向任意和签名匹配的类型，并且在运行时改变
-  hstl::unique_ptr<Foo, void (*)(Foo*)> ptr3(new Foo(42),
-                                             [](Foo* f) { delete f; });
-  EXPECT_EQ(sizeof(ptr3), sizeof(Foo*) + sizeof(void (*)(Foo*)));
+  hstl::unique_ptr<MoveOnly, void (*)(MoveOnly*)> ptr3(new MoveOnly(42),
+                                             [](MoveOnly* f) { delete f; });
+  EXPECT_EQ(sizeof(ptr3), sizeof(MoveOnly*) + sizeof(void (*)(MoveOnly*)));
   // hstl::unique_ptr<Foo, decltype( [](Foo* f) { delete f; } )> ptr4(new
   // Foo(42),
   //                                         [](Foo* f) { delete f; });

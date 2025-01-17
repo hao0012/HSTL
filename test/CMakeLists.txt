@@ -18,6 +18,7 @@ enable_testing()
 include(GoogleTest)
 
 set(TEST_EXECUTABLES
+  vector_test
   shared_ptr_test
   unique_ptr_test
   forward_test

@@ -187,6 +187,10 @@ struct conditional<true, T, F> {
 template <bool B, typename T, typename F>
 using conditional_t = typename conditional<B, T, F>::type;
 
+// ---------------- void_t ------------------ //
+template<typename... >
+using void_t = void;
+
 }  // namespace hstl
 
 #endif  // TYPE_TRAITS_HPP_
