@@ -22,9 +22,20 @@ public:
   function(const function& other) {
     // 类型擦除了怎么知道other中保存的可调用类型具体是什么？
     // 使用clone可以通过多态找到实际的类型
-    f = other.f->clone();
+    if (other.f->is_small_object()) {
+      other.f->small_clone(&buffer);
+      f = &buffer;
+    } else {
+      f = other.f->big_clone();
+    }
   }
-  function(function&& other): f(other.f) {
+  function(function&& other) {
+    if (other.f->is_small_object()) {
+     other.f->small_clone(&buffer);
+     f = &buffer;
+    } else {
+      f = other.f;
+    }
     other.f = nullptr;
   }
 
@@ -47,12 +58,15 @@ public:
     return (*f)(hstl::forward<Args>(args)...);
   }
 private:
+  static constexpr size_t BufferSize = sizeof(void *) * 3;
   struct FuncBase {
     virtual R operator()(Args... args) = 0;
     // 由于类型擦除，存放的可调用对象F的具体类型是不知道的，
     // clone用于实际的可调用对象类型F的拷贝，类似于工厂方法，
     // 这里的工厂就是自己
-    virtual FuncBase* clone() = 0;
+    virtual FuncBase* big_clone() = 0;
+    virtual void small_clone(void* buffer) = 0;
+    virtual constexpr bool is_small_object() = 0;
     virtual ~FuncBase() = default;
   };
   template<typename F>
@@ -62,16 +76,23 @@ private:
     FuncType f;
     explicit FuncImpl(const FuncType& func): f(func) {}
     explicit FuncImpl(FuncType&& func) : f(hstl::move(func)) {}
-    FuncBase* clone() override {
+    FuncBase* big_clone() override {
       return new FuncImpl(f);
     }
+    void small_clone(void* buffer) override {
+      ::new(buffer) FuncImpl(f);
+    }
+    constexpr bool is_small_object() override {
+      return sizeof(*this) <= BufferSize;
+    }
+    
     FuncImpl(const FuncImpl& fi): f(fi.f) {}
     R operator()(Args... args) override {
       return f(hstl::forward<Args>(args)...);
     }
   };
 
-  std::aligned_storage<sizeof(void *) * 3> buffer;
+  std::aligned_storage<BufferSize> buffer;
   FuncBase* f;
 };
 
