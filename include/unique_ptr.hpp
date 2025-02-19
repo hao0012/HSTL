@@ -72,7 +72,7 @@ class unique_ptr {
     pair_ = other.pair_;
     other.pair_ = p;
   }
-
+  // 只释放所有权但不析构资源
   pointer release() noexcept {
     auto p = pair_.first();
     pair_.first() = nullptr;

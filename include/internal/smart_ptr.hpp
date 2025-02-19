@@ -19,11 +19,10 @@ struct default_deleter {
    * 2. 赋值运算符中，使用copy and swap，直接获得新的删除器
    *    可以保证正确的删除器被调用
    */
-  template <typename U,
-            typename std::enable_if_t<std::is_convertible<U*, T*>::value>>
+  template <typename U, typename = std::enable_if_t<std::is_convertible<U*, T*>::value>>
   default_deleter(const default_deleter<U>&) noexcept {}
 
-  void operator()(T* ptr) {
+  void operator()(T* ptr) const {
     // TODO(hao): is_complete_type
     // static_assert(hstl::is_complete_type<T>::value, "Attempting to call the
     // destructor of an incomplete type");

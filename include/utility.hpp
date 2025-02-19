@@ -25,6 +25,14 @@ constexpr hstl::remove_reference_t<T>&& move(T&& t) noexcept {
 template <typename T>
 hstl::add_rvalue_reference_t<T> declval() noexcept;
 
+template<typename Pair>
+struct use_first {
+  using first_type = typename Pair::first_type;
+  const first_type& operator()(const Pair& p) const {
+    return p.first;
+  }
+};
+
 }  // namespace hstl
 
 #endif  // UTILITY_HPP_

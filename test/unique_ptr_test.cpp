@@ -90,3 +90,38 @@ TEST(UniquePtrTest, EBO) {
   // Foo(42),
   //                                         [](Foo* f) { delete f; });
 }
+
+struct Base {
+  Base() : b(new int[10]) {}
+  virtual void print() const { std::cout << "Base" << std::endl; }
+  virtual ~Base() {
+    delete[] b;
+    b = nullptr;
+  }
+
+  int* b;
+};
+struct Derived : public Base {
+  Derived() : Base(), d(new int[10]) {}
+  void print() const override { std::cout << "Derived" << std::endl; }
+  ~Derived() {
+    delete[] d;
+    d = nullptr;
+  }
+
+  int* d;
+};
+
+TEST(SharedPtrTest, InheritanceTest) {
+  hstl::unique_ptr<Base> tmp = hstl::make_unique<Derived>();
+
+  // 确保可以调用派生类的方法
+  {
+    std::ostringstream oss;
+    auto cout_buf = std::cout.rdbuf();
+    std::cout.rdbuf(oss.rdbuf());  // 重定向标准输出
+    tmp->print();
+    std::cout.rdbuf(cout_buf);  // 恢复标准输出
+    ASSERT_EQ(oss.str(), "Derived\n");
+  }
+}

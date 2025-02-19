@@ -25,6 +25,7 @@ set(TEST_EXECUTABLES
   is_reference_test
   add_reference_test
   declval_test
+  function_test
 )
 
 foreach(TEST ${TEST_EXECUTABLES})
