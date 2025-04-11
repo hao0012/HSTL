@@ -90,7 +90,7 @@ class counter_emplace : public counter {
   using value_type = T;
 
   template <typename... Args>
-  counter_emplace(Args&&... args) : counter(), value_{forward<Args>(args)...} {}
+  counter_emplace(Args&&... args) : counter(), value_(forward<Args>(args)...) {}
 
   value_type* get_value_ptr() { return &value_; }
 
@@ -224,7 +224,7 @@ class shared_ptr {
   }
 
   template <typename Y>
-  shared_ptr(const weak_ptr<Y>& r) noexcept : ptr_{r.ptr_}, count_{r.count_} {
+  explicit shared_ptr(const weak_ptr<Y>& r) : ptr_{r.ptr_}, count_{r.count_} {
     count_->lock();
     if (count_->get_shared() == 0) {
       throw bad_weak_ptr();
