@@ -17,20 +17,50 @@ enable_testing()
 
 include(GoogleTest)
 
+function(add_test_executable TEST_NAME TEST_SOURCE_PATH)
+
+  add_executable(${TEST_NAME} ${TEST_SOURCE_PATH}/${TEST_NAME}.cpp)
+  # include headers
+  target_include_directories(${TEST_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
+  target_link_libraries(${TEST_NAME}
+    GTest::gtest_main
+    asan
+  )
+  
+  gtest_discover_tests(${TEST_NAME})
+endfunction()
+
+# test/xxx_test.cpp
 set(TEST_EXECUTABLES
   vector_test
   shared_ptr_test
   unique_ptr_test
   forward_test
-  is_reference_test
-  add_reference_test
   declval_test
   function_test
 )
 
 foreach(TEST ${TEST_EXECUTABLES})
-  add_executable(${TEST} ${TEST}.cpp)
-  target_link_libraries(${TEST} GTest::gtest_main)
-  target_link_libraries(${TEST} asan)
-  gtest_discover_tests(${TEST})
+  add_test_executable(${TEST} .)
+endforeach()
+
+# test/type_traits/xxx_test.cpp
+set(TEST_TYPE_TRAITS_EXECUTABLES
+  is_reference_test
+  add_reference_test
+)
+
+foreach(TEST ${TEST_TYPE_TRAITS_EXECUTABLES})
+  add_test_executable(${TEST} type_traits)
+endforeach()
+
+# test/concurrency/xxx_test.cpp
+set(TEST_CONCURRENCY_EXECUTABLES
+  thread_pool_test
+  # parallel_test
+)
+
+foreach(TEST ${TEST_CONCURRENCY_EXECUTABLES})
+  add_test_executable(${TEST} concurrency)
 endforeach()
