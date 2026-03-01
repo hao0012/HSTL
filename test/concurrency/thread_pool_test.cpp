@@ -3,7 +3,6 @@
 
 TEST(THREAD_POOL_TEST, TEST0) {
   hstl::ThreadPool pool(10);
-  pool.start();
 
   auto add = [](int a, int b) { return a + b; };
 
@@ -16,7 +15,6 @@ TEST(THREAD_POOL_TEST, TEST0) {
 
 TEST(ThreadPoolTest, TEST1) {
   hstl::ThreadPool pool(4);
-  pool.start();
   
   std::atomic<int> counter(0);
   const int task_num = 100;
@@ -37,7 +35,6 @@ TEST(ThreadPoolTest, TEST1) {
 
 TEST(ThreadPoolTest, TEST2) {
   hstl::ThreadPool pool(2);
-  pool.start();
   pool.close();
   
   EXPECT_THROW(
@@ -51,7 +48,6 @@ TEST(ThreadPoolTest, TEST3) {
   
   {
     hstl::ThreadPool pool(1);
-    pool.start();
     
     auto fut = pool.submit([&task_started]() {
       task_started.store(true, std::memory_order_relaxed);
@@ -70,7 +66,6 @@ TEST(ThreadPoolTest, TEST4) {
   const int thread_num = 8;
   const int task_num = 1000;
   hstl::ThreadPool pool(thread_num);
-  pool.start();
   
   std::atomic<long long> sum(0);
   std::vector<std::future<void>> futures;
@@ -90,7 +85,6 @@ TEST(ThreadPoolTest, TEST4) {
 
 TEST(ThreadPoolTest, TEST5) {
   hstl::ThreadPool pool(1);
-  pool.start();
   
   auto fut = pool.submit([]() {
     throw std::runtime_error("Test exception");
